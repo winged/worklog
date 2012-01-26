@@ -1,0 +1,194 @@
+#!/usr/bin/python2
+
+import sqlite3
+import os.path
+import os
+import sys
+
+
+class WorkLogDB:
+
+	def __init__(self):
+		dbpath = os.path.join(os.environ['HOME'], '.workon')
+		dbfile = os.path.join(dbpath, 'worklog.db')
+
+		if os.path.exists(dbfile):
+			self.db = sqlite3.connect(dbfile)
+		else:
+			try:
+				os.mkdir(dbpath)
+			except OSError as e:
+				pass
+			self.db = sqlite3.connect(dbfile)
+			self.initdb()
+
+	def initdb(self):
+		self.db.execute("""
+			CREATE TABLE worklog (
+				id      INTEGER  NOT NULL PRIMARY KEY,
+				start   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				end     TIMESTAMP          DEFAULT NULL,
+				comment TEXT
+			)
+			""")
+		self.db.commit()
+
+	def create(self, comment):
+		stmt = self.db.cursor()
+		query = """
+			INSERT INTO worklog(start, comment)
+			VALUES(
+				CURRENT_TIMESTAMP,
+				?
+			)
+		"""
+		stmt.execute(query, (comment,))
+		self.db.commit()
+
+	def close_existing(self):
+		stmt = self.db.cursor()
+		query = """
+			UPDATE worklog
+			SET
+				end  = CURRENT_TIMESTAMP
+			WHERE
+				end IS NULL
+		"""
+		stmt.execute(query)
+		self.db.commit()
+
+	def sec2time(self, seconds):
+		if seconds is None:
+			seconds = 0
+		else:
+			seconds = int(seconds)
+
+		rest    = seconds %    3600
+		minutes = rest             /   60
+		hours   = (seconds - rest) / 3600
+
+		return "%02d:%02d" % (hours,minutes)
+
+	def entries_since(self, since):
+		"""Iterator for all entries. Yields a hashmap with the data"""
+		stmt = self.db.cursor()
+
+		query = """
+			SELECT
+				strftime('%s', start)             AS start,
+				strftime('%s', end)               AS end,
+				strftime('%s', CURRENT_TIMESTAMP) AS now,
+				comment,
+				strftime('%Y-%m-%d', start)       AS date
+			FROM worklog
+			WHERE
+				start > DATE(?)
+		"""
+		stmt.execute(query, (since,))
+		self.db.commit()
+
+
+		for row in stmt:
+			start   = int(row[0])
+			end     = 0
+			now     = int(row[2])
+			comment = row[3]
+			date    = row[4]
+			unfinished = False
+			if row[1] is not None:
+				end = int(row[1])
+
+			if row[1] is None:
+				duration   = now - start
+				unfinished = True
+			else:
+				duration = end - start
+
+			yield {
+				'start':      start,
+				'end':        end,
+				'duration':   duration,
+				'unfinished': unfinished,
+				'date':       date,
+				'comment':    comment,
+			}
+
+	def sum_since(self, since):
+		sums = {}
+		for entry in self.entries_since(since):
+			if entry['date'] not in sums:
+				sums[entry['date']] = 0
+			sums[entry['date']] += entry['duration']
+
+		dates = sums.keys()
+		dates.sort()
+
+		out = ''
+		for date in dates:
+			out += "%s: %s\n" % (date, self.sec2time(sums[date]))
+
+		return out
+
+
+	def list_since(self, since, showdate):
+		out = ''
+		for entry in self.entries_since(since):
+
+			if entry['unfinished']:
+				line = "%s (still running) - %s\n" % (self.sec2time(entry['duration']), entry['comment'])
+			else:
+				line = "%s                 - %s\n" % (self.sec2time(entry['duration']), entry['comment'])
+
+			if showdate:
+				line = "%s: %s" % (entry['date'], line)
+
+			out += line
+	
+		return out
+
+
+# action is first argument, rest is comment
+action = ''
+comment = ''
+if(len(sys.argv) > 1):
+	action = sys.argv[1]
+	if(len(sys.argv) > 2):
+		comment = " ".join(x.decode('utf-8') for x in sys.argv[2::])
+
+db = WorkLogDB()
+
+if action == 'on':
+	db.close_existing()
+	db.create(comment)
+	print("New entry stored.\n\n")
+	print(db.list_since('now', False))
+
+elif action == 'done':
+	db.close_existing()
+	print("Stopped tracking.")
+
+elif action == 'today':
+	print(db.list_since('now', False))
+
+elif action == 'sum':
+	print(db.sum_since('1970-01-01')),
+
+elif action == 'list':
+	print(db.list_since('1970-01-01', True)),
+
+elif action == 'since' and comment != '':
+	print(db.list_since(comment, True)),
+
+else:
+	print("Unknown action: %s" % action)
+	print("Available actions:")
+	print("  %s on <task-description>     -- start working on given task description, stop any previous task" % sys.argv[0])
+	print("  %s done                      -- stop current task" % sys.argv[0])
+	print("  %s today                     -- list all tasks recorded today" % sys.argv[0])
+	print("  %s list                      -- list all recorded tasks" % sys.argv[0])
+	print("  %s since yyyy-mm-dd          -- list all tasks since the given date" % sys.argv[0])
+	print("  %s sum                       -- Sum of work time, grouped by day" % sys.argv[0])
+	print("")
+	print("Work today: ")
+	print(db.list_since('now', False))
+
