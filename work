@@ -64,8 +64,15 @@ class WorkLogDB:
 			seconds = int(seconds)
 
 		rest    = seconds %    3600
-		minutes = rest             /   60
-		hours   = (seconds - rest) / 3600
+		minutes = rest             /   60.0
+		hours   = (seconds - rest) / 3600.0
+
+		# round half-minutes up. TODO: is there a
+		# clean way to do rounding in python2?
+		if (minutes - int(minutes)) >= 0.5:
+			minutes = int(minutes) + 1
+		else:
+			minutes = int(minutes)
 
 		return "%02d:%02d" % (hours,minutes)
 
@@ -143,7 +150,7 @@ class WorkLogDB:
 				line = "%s: %s" % (entry['date'], line)
 
 			out += line
-	
+
 		return out
 
 
