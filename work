@@ -5,7 +5,6 @@ import os.path
 import os
 import sys
 
-
 class WorkLogDB:
 
 	def __init__(self):
@@ -13,7 +12,7 @@ class WorkLogDB:
 		dbfile = os.path.join(dbpath, 'worklog.db')
 
 		if os.path.exists(dbfile):
-			self.db = sqlite3.connect(dbfile)
+			self.db = sqlite3.connect(dbfile, detect_types=sqlite3.PARSE_COLNAMES)
 		else:
 			try:
 				os.mkdir(dbpath)
@@ -63,18 +62,68 @@ class WorkLogDB:
 		else:
 			seconds = int(seconds)
 
-		rest    = seconds %    3600
-		minutes = rest             /   60.0
-		hours   = (seconds - rest) / 3600.0
+		# Round minutes properly: add 30 seconds, then do an int division by 60.
+		# This causes minutes to be rounded up if seconds % 60 > 30. Then, we
+		# calculate the hours and the remainder in minutes from there.
 
-		# round half-minutes up. TODO: is there a
-		# clean way to do rounding in python2?
-		if (minutes - int(minutes)) >= 0.5:
-			minutes = int(minutes) + 1
-		else:
-			minutes = int(minutes)
+		minutes = (seconds + 30) / 60
+		hours   = minutes / 60
+		minutes = minutes - hours * 60
 
 		return "%02d:%02d" % (hours,minutes)
+
+	def get_last_entry_id(self):
+		"""Returns the ID of the last entry"""
+		query = """
+			SELECT
+				MAX(id) AS id
+			FROM
+				worklog
+		"""
+		stmt = self.db.cursor()
+		stmt.execute(query)
+		self.db.commit()
+
+		row = stmt.fetchone()
+
+		return int(row[0])
+
+	def reset_last(self):
+		"""Removes the last logged entry"""
+		id = self.get_last_entry_id()
+
+		if id > 0:
+			stmt = self.db.cursor()
+
+			query = """
+				DELETE FROM worklog
+				WHERE
+					id = ?
+			"""
+			stmt.execute(query, (id,))
+			self.db.commit()
+
+			return "Last entry reset"
+		return "Empty DB - didn't reset!"
+
+	def update_last(self, comment):
+		"""Changes the text of the last logged entry"""
+		id = self.get_last_entry_id()
+
+		if id > 0:
+			stmt = self.db.cursor()
+
+			query = """
+				UPDATE worklog
+				SET    comment = ?
+				WHERE
+					id = ?
+			"""
+			stmt.execute(query, (comment, id))
+			self.db.commit()
+			return "Updated last entry with new comment"
+
+		return "Empty DB - couldn't edit!"
 
 	def entries_since(self, since):
 		"""Iterator for all entries. Yields a hashmap with the data"""
@@ -154,48 +203,57 @@ class WorkLogDB:
 		return out
 
 
-# action is first argument, rest is comment
-action = ''
-comment = ''
-if(len(sys.argv) > 1):
-	action = sys.argv[1]
-	if(len(sys.argv) > 2):
-		comment = " ".join(x.decode('utf-8') for x in sys.argv[2::])
+if __name__ == '__main__':
+	# action is first argument, rest is comment
+	action = ''
+	comment = ''
+	if(len(sys.argv) > 1):
+		action = sys.argv[1]
+		if(len(sys.argv) > 2):
+			comment = " ".join(x.decode('utf-8') for x in sys.argv[2::])
 
-db = WorkLogDB()
+	db = WorkLogDB()
 
-if action == 'on':
-	db.close_existing()
-	db.create(comment)
-	print("New entry stored.\n\n")
-	print(db.list_since('now', False))
+	if action == 'on':
+		db.close_existing()
+		db.create(comment)
+		print("New entry stored.\n\n")
+		print(db.list_since('now', False))
 
-elif action == 'done':
-	db.close_existing()
-	print("Stopped tracking.")
+	elif action == 'done':
+		db.close_existing()
+		print("Stopped tracking.")
 
-elif action == 'today':
-	print(db.list_since('now', False))
+	elif action == 'today':
+		print(db.list_since('now', False))
 
-elif action == 'sum':
-	print(db.sum_since('1970-01-01')),
+	elif action == 'sum':
+		print(db.sum_since('1970-01-01')),
 
-elif action == 'list':
-	print(db.list_since('1970-01-01', True)),
+	elif action == 'list':
+		print(db.list_since('1970-01-01', True)),
 
-elif action == 'since' and comment != '':
-	print(db.list_since(comment, True)),
+	elif action == 'reset':
+		print(db.reset_last()),
 
-else:
-	print("Unknown action: %s" % action)
-	print("Available actions:")
-	print("  %s on <task-description>     -- start working on given task description, stop any previous task" % sys.argv[0])
-	print("  %s done                      -- stop current task" % sys.argv[0])
-	print("  %s today                     -- list all tasks recorded today" % sys.argv[0])
-	print("  %s list                      -- list all recorded tasks" % sys.argv[0])
-	print("  %s since yyyy-mm-dd          -- list all tasks since the given date" % sys.argv[0])
-	print("  %s sum                       -- Sum of work time, grouped by day" % sys.argv[0])
-	print("")
-	print("Work today: ")
-	print(db.list_since('now', False))
+	elif action == 'edit' and comment != '':
+		print(db.update_last(comment)),
+
+	elif action == 'since' and comment != '':
+		print(db.list_since(comment, True)),
+
+	else:
+		print("Unknown action: %s" % action)
+		print("Available actions:")
+		print("  %s on <task-description>     -- start working on given task description, stop any previous task" % sys.argv[0])
+		print("  %s done                      -- stop current task" % sys.argv[0])
+		print("  %s today                     -- list all tasks recorded today" % sys.argv[0])
+		print("  %s list                      -- list all recorded tasks" % sys.argv[0])
+		print("  %s reset                     -- removes last task" % sys.argv[0])
+		print("  %s edit <task-description>   -- edits text of last task" % sys.argv[0])
+		print("  %s since yyyy-mm-dd          -- list all tasks since the given date" % sys.argv[0])
+		print("  %s sum                       -- Sum of work time, grouped by day" % sys.argv[0])
+		print("")
+		print("Work today: ")
+		print(db.list_since('now', False))
 
