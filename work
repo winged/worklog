@@ -56,6 +56,43 @@ class WorkLogDB:
 		stmt.execute(query)
 		self.db.commit()
 
+	def resume(self, restart_id = None):
+		"""Restarts task with given ID (or the last one if no id is given).
+
+		Returns the comment of the newly created task as a string. """
+
+		if restart_id is None:
+			restart_id = self.get_last_entry_id()
+
+		stmt = self.db.cursor()
+		query = """
+			INSERT INTO worklog(
+				start, end, comment
+			)
+			SELECT
+				CURRENT_TIMESTAMP,
+				NULL,
+				comment
+			FROM
+				worklog
+			WHERE
+				id = ?
+		"""
+		stmt.execute(query, [restart_id])
+		self.db.commit()
+
+		# now find out comment of last entry
+		new_id = self.get_last_entry_id()
+		query = """
+			SELECT comment
+			FROM   worklog
+			WHERE  id = ?
+		"""
+		stmt = self.db.cursor()
+		stmt.execute(query, [new_id])
+		return stmt.fetchone()[0]
+
+
 	def sec2time(self, seconds):
 		if seconds is None:
 			seconds = 0
@@ -223,6 +260,17 @@ if __name__ == '__main__':
 	elif action == 'done':
 		db.close_existing()
 		print("Stopped tracking.")
+
+	elif action == 'resume':
+		db.close_existing()
+
+		try:
+			restart_id = int(comment)
+		except:
+			restart_id = None
+
+		restarted = db.resume(restart_id)
+		print("Restarted task '%s'." % restarted)
 
 	elif action == 'today':
 		print(db.list_since('now', False))
