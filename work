@@ -172,7 +172,8 @@ class WorkLogDB:
 				strftime('%s', end)               AS end,
 				strftime('%s', CURRENT_TIMESTAMP) AS now,
 				comment,
-				strftime('%Y-%m-%d', start)       AS date
+				strftime('%Y-%m-%d', start)       AS date,
+				id
 			FROM worklog
 			WHERE
 				start > DATE(?)
@@ -198,6 +199,7 @@ class WorkLogDB:
 				duration = end - start
 
 			yield {
+				'id':         row[5],
 				'start':      start,
 				'end':        end,
 				'duration':   duration,
@@ -230,7 +232,7 @@ class WorkLogDB:
 			if entry['unfinished']:
 				line = "%s (still running) - %s\n" % (self.sec2time(entry['duration']), entry['comment'])
 			else:
-				line = "%s                 - %s\n" % (self.sec2time(entry['duration']), entry['comment'])
+				line = "%s (id: %9d) - %s\n" % (self.sec2time(entry['duration']), entry['id'], entry['comment'])
 
 			if showdate:
 				line = "%s: %s" % (entry['date'], line)
