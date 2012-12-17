@@ -15,10 +15,10 @@ Install the script in your ~/bin or /usr/local/bin folder and chmod+x
 it. Then, you can issue the following commands to track your work:
 
     work on <task-description>     -- start working on given task description, stop any previous task
+    work edit <task-description>   -- edits text of last task
     work done                      -- stop current task
     work resume                    -- resumes the last logged task
-    work edit <task-description>   -- edits text of last task
-    work resume <id>               -- resumes task with given id
+    work resume <id>               -- resumes task with given id (see work since, work today etc.)
     work reset                     -- removes last task
 
 There are also a few commands available to list / analyze what you've
