@@ -251,46 +251,46 @@ if __name__ == '__main__':
 		if(len(sys.argv) > 2):
 			comment = " ".join(x.decode('utf-8') for x in sys.argv[2::])
 
-	db = WorkLogDB()
+	log = WorkLogDB()
 
 	if action == 'on':
-		db.close_existing()
-		db.create(comment)
+		log.close_existing()
+		log.create(comment)
 		print("New entry stored.\n\n")
-		print(db.list_since('now', False))
+		print(log.list_since('now', False))
 
 	elif action == 'done':
-		db.close_existing()
+		log.close_existing()
 		print("Stopped tracking.")
 
 	elif action == 'resume':
-		db.close_existing()
+		log.close_existing()
 
 		try:
 			restart_id = int(comment)
 		except:
 			restart_id = None
 
-		restarted = db.resume(restart_id)
+		restarted = log.resume(restart_id)
 		print("Restarted task '%s'." % restarted)
 
 	elif action == 'today':
-		print(db.list_since('now', False))
+		print(log.list_since('now', False))
 
 	elif action == 'sum':
-		print(db.sum_since('1970-01-01')),
+		print(log.sum_since('1970-01-01')),
 
 	elif action == 'list':
-		print(db.list_since('1970-01-01', True)),
+		print(log.list_since('1970-01-01', True)),
 
 	elif action == 'reset':
-		print(db.reset_last()),
+		print(log.reset_last()),
 
 	elif action == 'edit' and comment != '':
-		print(db.update_last(comment)),
+		print(log.update_last(comment)),
 
 	elif action == 'since' and comment != '':
-		print(db.list_since(comment, True)),
+		print(log.list_since(comment, True)),
 
 	else:
 		print("Unknown action: %s" % action)
@@ -307,5 +307,5 @@ if __name__ == '__main__':
 		print("  work sum                       -- Sum of work time, grouped by day")
 		print("")
 		print("Work today: ")
-		print(db.list_since('now', False))
+		print(log.list_since('now', False))
 
