@@ -241,6 +241,26 @@ class WorkLogDB:
 
 		return out
 
+def show_help(error = None):
+	if error is not None:
+		print(error)
+		print("")
+
+	print("Available actions:")
+	print("  work on <task-description>     -- start working on given task description, stop any previous task")
+	print("  work done                      -- stop current task")
+	print("  work today                     -- list all tasks recorded today")
+	print("  work list                      -- list all recorded tasks")
+	print("  work reset                     -- removes last task")
+	print("  work resume                    -- resumes the last logged task")
+	print("  work resume <id>               -- resumes task with given id")
+	print("  work edit <task-description>   -- edits text of last task")
+	print("  work since yyyy-mm-dd          -- list all tasks since the given date")
+	print("  work sum                       -- Sum of work time, grouped by day")
+	print("")
+	print("Work today: ")
+	print(log.list_since('now', False))
+
 
 if __name__ == '__main__':
 	# action is first argument, rest is comment
@@ -286,26 +306,18 @@ if __name__ == '__main__':
 	elif action == 'reset':
 		print(log.reset_last()),
 
-	elif action == 'edit' and comment != '':
-		print(log.update_last(comment)),
+	elif action == 'edit':
+		if comment != '':
+			print(log.update_last(comment)),
+		else:
+			show_help("When editing, you should give me a new comment")
 
-	elif action == 'since' and comment != '':
-		print(log.list_since(comment, True)),
-
+	elif action == 'since':
+		if comment != '':
+			print(log.list_since(comment, True)),
+		else:
+			show_help("When listing work since someday, you should give me a date")
 	else:
-		print("Unknown action: %s" % action)
-		print("Available actions:")
-		print("  work on <task-description>     -- start working on given task description, stop any previous task")
-		print("  work done                      -- stop current task")
-		print("  work today                     -- list all tasks recorded today")
-		print("  work list                      -- list all recorded tasks")
-		print("  work reset                     -- removes last task")
-		print("  work resume                    -- resumes the last logged task")
-		print("  work resume <id>               -- resumes task with given id")
-		print("  work edit <task-description>   -- edits text of last task")
-		print("  work since yyyy-mm-dd          -- list all tasks since the given date")
-		print("  work sum                       -- Sum of work time, grouped by day")
-		print("")
-		print("Work today: ")
-		print(log.list_since('now', False))
+		show_help("Unknown action: %s" % action)
+
 
