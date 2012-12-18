@@ -216,8 +216,7 @@ class WorkLogDB:
 				sums[entry['date']] = 0
 			sums[entry['date']] += entry['duration']
 
-		dates = sums.keys()
-		dates.sort()
+		dates = sorted(sums.keys())
 
 		out = ''
 		for date in dates:
