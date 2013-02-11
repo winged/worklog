@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import subprocess
 import sqlite3
 import os.path
 import os
@@ -248,6 +249,7 @@ def show_help(error = None):
 
 	print("Available actions:")
 	print("  work on <task-description>     -- start working on given task description, stop any previous task")
+	print("  work on --ask                  -- stop any previous task, shows a dialog for entering your current task")
 	print("  work done                      -- stop current task")
 	print("  work today                     -- list all tasks recorded today")
 	print("  work list                      -- list all recorded tasks")
@@ -262,6 +264,15 @@ def show_help(error = None):
 	print(log.list_since('now', False))
 
 
+def ask(question):
+	"""Shows a dialog box to the user, then returns the entered text."""
+	command = [
+		'zenity',
+		'--entry',
+		'--text=%s' % question
+	]
+	return subprocess.check_output(command).strip().decode('utf8')
+
 if __name__ == '__main__':
 	# action is first argument, rest is comment
 	action = ''
@@ -275,9 +286,14 @@ if __name__ == '__main__':
 
 	if action == 'on':
 		log.close_existing()
-		log.create(comment)
-		print("New entry stored.\n\n")
-		print(log.list_since('now', False))
+		if comment == '--ask':
+			comment = ask('What are you working on?')
+		if comment == '' or comment == 'nothing':
+			print("Not working on anything, not logging")
+		else:
+			log.create(comment)
+			print("New entry stored.\n\n")
+			print(log.list_since('now', False))
 
 	elif action == 'done':
 		log.close_existing()
