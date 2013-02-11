@@ -31,6 +31,17 @@ done in the past:
 
 Yep, that's about it.
 
+More fun
+========
+
+There are a couple more sub-commands that you could use. If it's too cumbersome for you to even
+enter "work on whatever" in a terminal, why not try this little oneliner here?
+
+    xdotool behave_screen_edge --delay 300 top-left  exec work on --ask
+
+Now, if your mouse touches the top-left corner of the screen, a text box pops up asking you what
+you're working on. Just enter some text, and voilà!
+
 Files
 =====
 
