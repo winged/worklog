@@ -267,11 +267,14 @@ def show_help(error = None):
 def ask(question):
 	"""Shows a dialog box to the user, then returns the entered text."""
 	command = [
-		'zenity',
-		'--entry',
-		'--text=%s' % question
+		'dmenu',
+		'-p',
+		question
 	]
-	return subprocess.check_output(command).strip().decode('utf8')
+	try:
+		return subprocess.check_output(command, input='').strip().decode('utf8')
+	except subprocess.CalledProcessError:
+		return ''
 
 if __name__ == '__main__':
 	# action is first argument, rest is comment
