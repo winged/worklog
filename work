@@ -8,335 +8,335 @@ import sys
 
 class WorkLogDB:
 
-	def __init__(self):
-		dbpath = os.path.join(os.environ['HOME'], '.workon')
-		dbfile = os.path.join(dbpath, 'worklog.db')
+    def __init__(self):
+        dbpath = os.path.join(os.environ['HOME'], '.workon')
+        dbfile = os.path.join(dbpath, 'worklog.db')
 
-		if os.path.exists(dbfile):
-			self.db = sqlite3.connect(dbfile, detect_types=sqlite3.PARSE_COLNAMES)
-		else:
-			try:
-				os.mkdir(dbpath)
-			except OSError as e:
-				pass
-			self.db = sqlite3.connect(dbfile)
-			self.initdb()
+        if os.path.exists(dbfile):
+            self.db = sqlite3.connect(dbfile, detect_types=sqlite3.PARSE_COLNAMES)
+        else:
+            try:
+                os.mkdir(dbpath)
+            except OSError as e:
+                pass
+            self.db = sqlite3.connect(dbfile)
+            self.initdb()
 
-	def initdb(self):
-		self.db.execute("""
-			CREATE TABLE worklog (
-				id      INTEGER  NOT NULL PRIMARY KEY,
-				start   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-				end     TIMESTAMP          DEFAULT NULL,
-				comment TEXT
-			)
-			""")
-		self.db.commit()
+    def initdb(self):
+        self.db.execute("""
+            CREATE TABLE worklog (
+                id      INTEGER  NOT NULL PRIMARY KEY,
+                start   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                end     TIMESTAMP          DEFAULT NULL,
+                comment TEXT
+            )
+            """)
+        self.db.commit()
 
-	def create(self, comment):
-		stmt = self.db.cursor()
-		query = """
-			INSERT INTO worklog(start, comment)
-			VALUES(
-				CURRENT_TIMESTAMP,
-				?
-			)
-		"""
-		stmt.execute(query, (comment,))
-		self.db.commit()
+    def create(self, comment):
+        stmt = self.db.cursor()
+        query = """
+            INSERT INTO worklog(start, comment)
+            VALUES(
+                CURRENT_TIMESTAMP,
+                ?
+            )
+        """
+        stmt.execute(query, (comment,))
+        self.db.commit()
 
-	def close_existing(self):
-		stmt = self.db.cursor()
-		query = """
-			UPDATE worklog
-			SET
-				end  = CURRENT_TIMESTAMP
-			WHERE
-				end IS NULL
-		"""
-		stmt.execute(query)
-		self.db.commit()
+    def close_existing(self):
+        stmt = self.db.cursor()
+        query = """
+            UPDATE worklog
+            SET
+                end  = CURRENT_TIMESTAMP
+            WHERE
+                end IS NULL
+        """
+        stmt.execute(query)
+        self.db.commit()
 
-	def resume(self, restart_id = None):
-		"""Restarts task with given ID (or the last one if no id is given).
+    def resume(self, restart_id = None):
+        """Restarts task with given ID (or the last one if no id is given).
 
-		Returns the comment of the newly created task as a string. """
+        Returns the comment of the newly created task as a string. """
 
-		if restart_id is None:
-			restart_id = self.get_last_entry_id()
+        if restart_id is None:
+            restart_id = self.get_last_entry_id()
 
-		stmt = self.db.cursor()
-		query = """
-			INSERT INTO worklog(
-				start, end, comment
-			)
-			SELECT
-				CURRENT_TIMESTAMP,
-				NULL,
-				comment
-			FROM
-				worklog
-			WHERE
-				id = ?
-		"""
-		stmt.execute(query, [restart_id])
-		self.db.commit()
+        stmt = self.db.cursor()
+        query = """
+            INSERT INTO worklog(
+                start, end, comment
+            )
+            SELECT
+                CURRENT_TIMESTAMP,
+                NULL,
+                comment
+            FROM
+                worklog
+            WHERE
+                id = ?
+        """
+        stmt.execute(query, [restart_id])
+        self.db.commit()
 
-		# now find out comment of last entry
-		new_id = self.get_last_entry_id()
-		query = """
-			SELECT comment
-			FROM   worklog
-			WHERE  id = ?
-		"""
-		stmt = self.db.cursor()
-		stmt.execute(query, [new_id])
-		return stmt.fetchone()[0]
-
-
-	def sec2time(self, seconds):
-		if seconds is None:
-			seconds = 0
-		else:
-			seconds = int(seconds)
-
-		# Round minutes properly: add 30 seconds, then do an int division by 60.
-		# This causes minutes to be rounded up if seconds % 60 > 30. Then, we
-		# calculate the hours and the remainder in minutes from there.
-
-		minutes = (seconds + 30) / 60
-		hours   = int(minutes / 60)
-		minutes = int(minutes - hours * 60)
+        # now find out comment of last entry
+        new_id = self.get_last_entry_id()
+        query = """
+            SELECT comment
+            FROM   worklog
+            WHERE  id = ?
+        """
+        stmt = self.db.cursor()
+        stmt.execute(query, [new_id])
+        return stmt.fetchone()[0]
 
 
-		return "%02d:%02d" % (hours,minutes)
+    def sec2time(self, seconds):
+        if seconds is None:
+            seconds = 0
+        else:
+            seconds = int(seconds)
 
-	def get_last_entry_id(self):
-		"""Returns the ID of the last entry"""
-		query = """
-			SELECT
-				MAX(id) AS id
-			FROM
-				worklog
-		"""
-		stmt = self.db.cursor()
-		stmt.execute(query)
-		self.db.commit()
+        # Round minutes properly: add 30 seconds, then do an int division by 60.
+        # This causes minutes to be rounded up if seconds % 60 > 30. Then, we
+        # calculate the hours and the remainder in minutes from there.
 
-		row = stmt.fetchone()
-
-		return int(row[0])
-
-	def reset_last(self):
-		"""Removes the last logged entry"""
-		id = self.get_last_entry_id()
-
-		if id > 0:
-			stmt = self.db.cursor()
-
-			query = """
-				DELETE FROM worklog
-				WHERE
-					id = ?
-			"""
-			stmt.execute(query, (id,))
-			self.db.commit()
-
-			return "Last entry reset"
-		return "Empty DB - didn't reset!"
-
-	def update_last(self, comment):
-		"""Changes the text of the last logged entry"""
-		id = self.get_last_entry_id()
-
-		if id > 0:
-			stmt = self.db.cursor()
-
-			query = """
-				UPDATE worklog
-				SET    comment = ?
-				WHERE
-					id = ?
-			"""
-			stmt.execute(query, (comment, id))
-			self.db.commit()
-			return "Updated last entry with new comment"
-
-		return "Empty DB - couldn't edit!"
-
-	def entries_since(self, since):
-		"""Iterator for all entries. Yields a hashmap with the data"""
-		stmt = self.db.cursor()
-
-		query = """
-			SELECT
-				strftime('%s', start)             AS start,
-				strftime('%s', end)               AS end,
-				strftime('%s', CURRENT_TIMESTAMP) AS now,
-				comment,
-				strftime('%Y-%m-%d', start)       AS date,
-				id
-			FROM worklog
-			WHERE
-				start > DATE(?)
-		"""
-		stmt.execute(query, (since,))
-		self.db.commit()
+        minutes = (seconds + 30) / 60
+        hours   = int(minutes / 60)
+        minutes = int(minutes - hours * 60)
 
 
-		for row in stmt:
-			start   = int(row[0])
-			end     = 0
-			now     = int(row[2])
-			comment = row[3]
-			date    = row[4]
-			unfinished = False
-			if row[1] is not None:
-				end = int(row[1])
+        return "%02d:%02d" % (hours,minutes)
 
-			if row[1] is None:
-				duration   = now - start
-				unfinished = True
-			else:
-				duration = end - start
+    def get_last_entry_id(self):
+        """Returns the ID of the last entry"""
+        query = """
+            SELECT
+                MAX(id) AS id
+            FROM
+                worklog
+        """
+        stmt = self.db.cursor()
+        stmt.execute(query)
+        self.db.commit()
 
-			yield {
-				'id':         row[5],
-				'start':      start,
-				'end':        end,
-				'duration':   duration,
-				'unfinished': unfinished,
-				'date':       date,
-				'comment':    comment,
-			}
+        row = stmt.fetchone()
 
-	def sum_since(self, since):
-		sums = {}
-		for entry in self.entries_since(since):
-			if entry['date'] not in sums:
-				sums[entry['date']] = 0
-			sums[entry['date']] += entry['duration']
+        return int(row[0])
 
-		dates = sorted(sums.keys())
+    def reset_last(self):
+        """Removes the last logged entry"""
+        id = self.get_last_entry_id()
 
-		out = ''
-		for date in dates:
-			out += "%s: %s\n" % (date, self.sec2time(sums[date]))
+        if id > 0:
+            stmt = self.db.cursor()
 
-		return out
+            query = """
+                DELETE FROM worklog
+                WHERE
+                    id = ?
+            """
+            stmt.execute(query, (id,))
+            self.db.commit()
+
+            return "Last entry reset"
+        return "Empty DB - didn't reset!"
+
+    def update_last(self, comment):
+        """Changes the text of the last logged entry"""
+        id = self.get_last_entry_id()
+
+        if id > 0:
+            stmt = self.db.cursor()
+
+            query = """
+                UPDATE worklog
+                SET    comment = ?
+                WHERE
+                    id = ?
+            """
+            stmt.execute(query, (comment, id))
+            self.db.commit()
+            return "Updated last entry with new comment"
+
+        return "Empty DB - couldn't edit!"
+
+    def entries_since(self, since):
+        """Iterator for all entries. Yields a hashmap with the data"""
+        stmt = self.db.cursor()
+
+        query = """
+            SELECT
+                strftime('%s', start)             AS start,
+                strftime('%s', end)               AS end,
+                strftime('%s', CURRENT_TIMESTAMP) AS now,
+                comment,
+                strftime('%Y-%m-%d', start)       AS date,
+                id
+            FROM worklog
+            WHERE
+                start > DATE(?)
+        """
+        stmt.execute(query, (since,))
+        self.db.commit()
 
 
-	def list_since(self, since, showdate):
-		out = ''
-		for entry in self.entries_since(since):
+        for row in stmt:
+            start   = int(row[0])
+            end     = 0
+            now     = int(row[2])
+            comment = row[3]
+            date    = row[4]
+            unfinished = False
+            if row[1] is not None:
+                end = int(row[1])
 
-			if entry['unfinished']:
-				line = "%s (still running) - %s\n" % (self.sec2time(entry['duration']), entry['comment'])
-			else:
-				line = "%s (id: %9d) - %s\n" % (self.sec2time(entry['duration']), entry['id'], entry['comment'])
+            if row[1] is None:
+                duration   = now - start
+                unfinished = True
+            else:
+                duration = end - start
 
-			if showdate:
-				line = "%s: %s" % (entry['date'], line)
+            yield {
+                'id':         row[5],
+                'start':      start,
+                'end':        end,
+                'duration':   duration,
+                'unfinished': unfinished,
+                'date':       date,
+                'comment':    comment,
+            }
 
-			out += line
+    def sum_since(self, since):
+        sums = {}
+        for entry in self.entries_since(since):
+            if entry['date'] not in sums:
+                sums[entry['date']] = 0
+            sums[entry['date']] += entry['duration']
 
-		return out
+        dates = sorted(sums.keys())
+
+        out = ''
+        for date in dates:
+            out += "%s: %s\n" % (date, self.sec2time(sums[date]))
+
+        return out
+
+
+    def list_since(self, since, showdate):
+        out = ''
+        for entry in self.entries_since(since):
+
+            if entry['unfinished']:
+                line = "%s (still running) - %s\n" % (self.sec2time(entry['duration']), entry['comment'])
+            else:
+                line = "%s (id: %9d) - %s\n" % (self.sec2time(entry['duration']), entry['id'], entry['comment'])
+
+            if showdate:
+                line = "%s: %s" % (entry['date'], line)
+
+            out += line
+
+        return out
 
 def show_help(error = None):
-	if error is not None:
-		print(error)
-		print("")
+    if error is not None:
+        print(error)
+        print("")
 
-	print("Available actions:")
-	print("  work on <task-description>     -- start working on given task description, stop any previous task")
-	print("  work on --ask                  -- stop any previous task, shows a dialog for entering your current task")
-	print("  work done                      -- stop current task")
-	print("  work today                     -- list all tasks recorded today")
-	print("  work list                      -- list all recorded tasks")
-	print("  work reset                     -- removes last task")
-	print("  work resume                    -- resumes the last logged task")
-	print("  work resume <id>               -- resumes task with given id")
-	print("  work edit <task-description>   -- edits text of last task")
-	print("  work since yyyy-mm-dd          -- list all tasks since the given date")
-	print("  work sum                       -- Sum of work time, grouped by day")
-	print("")
-	print("Work today: ")
-	print(log.list_since('now', False))
+    print("Available actions:")
+    print("  work on <task-description>     -- start working on given task description, stop any previous task")
+    print("  work on --ask                  -- stop any previous task, shows a dialog for entering your current task")
+    print("  work done                      -- stop current task")
+    print("  work today                     -- list all tasks recorded today")
+    print("  work list                      -- list all recorded tasks")
+    print("  work reset                     -- removes last task")
+    print("  work resume                    -- resumes the last logged task")
+    print("  work resume <id>               -- resumes task with given id")
+    print("  work edit <task-description>   -- edits text of last task")
+    print("  work since yyyy-mm-dd          -- list all tasks since the given date")
+    print("  work sum                       -- Sum of work time, grouped by day")
+    print("")
+    print("Work today: ")
+    print(log.list_since('now', False))
 
 
 def ask(question):
-	"""Shows a dialog box to the user, then returns the entered text."""
-	command = [
-		'dmenu',
-		'-p',
-		question
-	]
-	try:
-		return subprocess.check_output(command, input='').strip().decode('utf8')
-	except subprocess.CalledProcessError:
-		return ''
+    """Shows a dialog box to the user, then returns the entered text."""
+    command = [
+        'dmenu',
+        '-p',
+        question
+    ]
+    try:
+        return subprocess.check_output(command, input='').strip().decode('utf8')
+    except subprocess.CalledProcessError:
+        return ''
 
 if __name__ == '__main__':
-	# action is first argument, rest is comment
-	action = ''
-	comment = ''
-	if(len(sys.argv) > 1):
-		action = sys.argv[1]
-		if(len(sys.argv) > 2):
-			comment = " ".join(sys.argv[2::])
+    # action is first argument, rest is comment
+    action = ''
+    comment = ''
+    if(len(sys.argv) > 1):
+        action = sys.argv[1]
+        if(len(sys.argv) > 2):
+            comment = " ".join(sys.argv[2::])
 
-	log = WorkLogDB()
+    log = WorkLogDB()
 
-	if action == 'on':
-		log.close_existing()
-		if comment == '--ask':
-			comment = ask('What are you working on?')
-		if comment == '' or comment == 'nothing':
-			print("Not working on anything, not logging")
-		else:
-			log.create(comment)
-			print("New entry stored.\n\n")
-			print(log.list_since('now', False))
+    if action == 'on':
+        log.close_existing()
+        if comment == '--ask':
+            comment = ask('What are you working on?')
+        if comment == '' or comment == 'nothing':
+            print("Not working on anything, not logging")
+        else:
+            log.create(comment)
+            print("New entry stored.\n\n")
+            print(log.list_since('now', False))
 
-	elif action == 'done':
-		log.close_existing()
-		print("Stopped tracking.")
+    elif action == 'done':
+        log.close_existing()
+        print("Stopped tracking.")
 
-	elif action == 'resume':
-		log.close_existing()
+    elif action == 'resume':
+        log.close_existing()
 
-		try:
-			restart_id = int(comment)
-		except:
-			restart_id = None
+        try:
+            restart_id = int(comment)
+        except:
+            restart_id = None
 
-		restarted = log.resume(restart_id)
-		print("Restarted task '%s'." % restarted)
+        restarted = log.resume(restart_id)
+        print("Restarted task '%s'." % restarted)
 
-	elif action == 'today':
-		print(log.list_since('now', False))
+    elif action == 'today':
+        print(log.list_since('now', False))
 
-	elif action == 'sum':
-		print(log.sum_since('1970-01-01')),
+    elif action == 'sum':
+        print(log.sum_since('1970-01-01')),
 
-	elif action == 'list':
-		print(log.list_since('1970-01-01', True)),
+    elif action == 'list':
+        print(log.list_since('1970-01-01', True)),
 
-	elif action == 'reset':
-		print(log.reset_last()),
+    elif action == 'reset':
+        print(log.reset_last()),
 
-	elif action == 'edit':
-		if comment != '':
-			print(log.update_last(comment)),
-		else:
-			show_help("When editing, you should give me a new comment")
+    elif action == 'edit':
+        if comment != '':
+            print(log.update_last(comment)),
+        else:
+            show_help("When editing, you should give me a new comment")
 
-	elif action == 'since':
-		if comment != '':
-			print(log.list_since(comment, True)),
-		else:
-			show_help("When listing work since someday, you should give me a date")
-	else:
-		show_help("Unknown action: %s" % action)
+    elif action == 'since':
+        if comment != '':
+            print(log.list_since(comment, True)),
+        else:
+            show_help("When listing work since someday, you should give me a date")
+    else:
+        show_help("Unknown action: %s" % action)
 
 
