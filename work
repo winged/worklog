@@ -297,6 +297,7 @@ if __name__ == '__main__':
             comment = ask('What are you working on?')
         if comment == '' or comment == 'nothing':
             print("Not working on anything, not logging")
+            exit(0)
         else:
             log.create(comment)
             print("New entry stored.\n\n")
