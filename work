@@ -287,36 +287,34 @@ if __name__ == '__main__':
     # action is first argument, rest is comment
     action = ''
     comment = ''
+    flags = set()
     if(len(sys.argv) > 1):
         action = sys.argv[1]
         if(len(sys.argv) > 2):
-            comment = " ".join(sys.argv[2::])
+            comment = " ".join([arg for arg in sys.argv[2::] if not arg.starswith('--')])
+
+        if(len(sys.argv) > 2):
+            args = set([arg for arg in sys.argv[2::] if arg.starswith('--')])
 
     log = WorkLogDB()
 
-    notify = print
+    if '--notify' in flags:
+        notify = print
+
+    if '--ask' in flags:
 
     if action == 'on':
         log.close_existing()
-        if re.match(r'^--notify\s+.*', comment):
-            comment = re.sub(r'--notify\s+', '', comment)
-            notify = notify_send
-        elif re.match(r'\s+--notify$', comment):
-            comment = re.sub(r'\s+--notify$', '', comment)
-            notify = notify_send
 
-        elif re.match(r'\s+--notify\s+', comment):
-            comment = re.sub(r'\s+--notify\s+', ' ', comment)
-            notify = notify_send
+        if '--ask' in flags:
+            comment = ask('What are you working on?')
 
         if comment == '-':
             log.close_existing()
             notify("Stopped tracking.")
-            exit(0)
-        if comment == '--ask':
-            comment = ask('What are you working on?')
+
         if comment == '' or comment == 'nothing':
-            notify("Not working on anything, not logging")
+            notify("No input, keeping current state")
             exit(0)
         else:
             log.create(comment)
@@ -324,7 +322,7 @@ if __name__ == '__main__':
 
     elif action == 'done':
         log.close_existing()
-        print("Stopped tracking.")
+        notify("Stopped tracking.")
 
     elif action == 'resume':
         log.close_existing()
@@ -335,29 +333,29 @@ if __name__ == '__main__':
             restart_id = None
 
         restarted = log.resume(restart_id)
-        print("Restarted task '%s'." % restarted)
+        notify("Restarted task '%s'." % restarted)
 
     elif action == 'today':
-        print(log.list_since('now', False))
+        notify(log.list_since('now', False))
 
     elif action == 'sum':
-        print(log.sum_since('1970-01-01')),
+        notify(log.sum_since('1970-01-01')),
 
     elif action == 'list':
-        print(log.list_since('1970-01-01', True)),
+        notify(log.list_since('1970-01-01', True)),
 
     elif action == 'reset':
-        print(log.reset_last()),
+        notify(log.reset_last()),
 
     elif action == 'edit':
         if comment != '':
-            print(log.update_last(comment)),
+            notify(log.update_last(comment)),
         else:
             show_help("When editing, you should give me a new comment")
 
     elif action == 'since':
         if comment != '':
-            print(log.list_since(comment, True)),
+            notify(log.list_since(comment, True)),
         else:
             show_help("When listing work since someday, you should give me a date")
     else:
