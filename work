@@ -301,8 +301,6 @@ if __name__ == '__main__':
     if '--notify' in flags:
         notify = print
 
-    if '--ask' in flags:
-
     if action == 'on':
         log.close_existing()
 
