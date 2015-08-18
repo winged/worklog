@@ -5,6 +5,7 @@ import sqlite3
 import os.path
 import os
 import sys
+import re
 
 class WorkLogDB:
 
@@ -249,7 +250,9 @@ def show_help(error = None):
 
     print("Available actions:")
     print("  work on <task-description>     -- start working on given task description, stop any previous task")
+    print("  work on <task-description> --notify -- Same as above, but notify via GUI what's happening")
     print("  work on --ask                  -- stop any previous task, shows a dialog for entering your current task")
+    print("  work on -                      -- Alias for 'work done'. Useful if you keymapped 'work on --ask'.")
     print("  work done                      -- stop current task")
     print("  work today                     -- list all tasks recorded today")
     print("  work list                      -- list all recorded tasks")
@@ -276,6 +279,10 @@ def ask(question):
     except subprocess.CalledProcessError:
         return ''
 
+def notify_send(text):
+    subprocess.call(['notify-send', 'Worklog', text])
+
+
 if __name__ == '__main__':
     # action is first argument, rest is comment
     action = ''
@@ -287,21 +294,33 @@ if __name__ == '__main__':
 
     log = WorkLogDB()
 
+    notify = print
+
     if action == 'on':
         log.close_existing()
+        if re.match(r'^--notify\s+.*', comment):
+            comment = re.sub(r'--notify\s+', '', comment)
+            notify = notify_send
+        elif re.match(r'\s+--notify$', comment):
+            comment = re.sub(r'\s+--notify$', '', comment)
+            notify = notify_send
+
+        elif re.match(r'\s+--notify\s+', comment):
+            comment = re.sub(r'\s+--notify\s+', ' ', comment)
+            notify = notify_send
+
         if comment == '-':
             log.close_existing()
-            print("Stopped tracking.")
+            notify("Stopped tracking.")
             exit(0)
         if comment == '--ask':
             comment = ask('What are you working on?')
         if comment == '' or comment == 'nothing':
-            print("Not working on anything, not logging")
+            notify("Not working on anything, not logging")
             exit(0)
         else:
             log.create(comment)
-            print("New entry stored.\n\n")
-            print(log.list_since('now', False))
+            notify("New entry stored.\n\n %s" % log.list_since('now', False))
 
     elif action == 'done':
         log.close_existing()
