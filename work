@@ -165,6 +165,88 @@ class WorkLogDB:
 
         return "Empty DB - couldn't edit!"
 
+    def merge(self, ids):
+        if len(ids) < 1:
+            # nothing to do here
+            return
+
+        ids_str = ", ".join([str(x) for x in ids])
+        stmt = self.db.cursor()
+        query = """
+            SELECT
+                strftime('%%s', start)             AS start,
+                strftime('%%s', end)               AS end,
+                strftime('%%s', CURRENT_TIMESTAMP) AS now,
+                comment,
+                strftime('%%Y-%%m-%%d', start)       AS date,
+                id
+            FROM worklog
+            WHERE
+                id in (%s)
+        """ % ids_str
+        stmt.execute(query)
+
+        unfinished = False
+        duration   = 0
+        new_text = []
+
+        for row in stmt:
+            new_text.append(row[3])
+            start   = int(row[0])
+            end     = 0
+            now     = int(row[2])
+
+            if row[1] is not None:
+                end = int(row[1])
+
+            if row[1] is None:
+                #print("-- unfinished: adding %d" % (now - start))
+                duration   += (now - start)
+                unfinished = True
+            else:
+                #print("-- adding %d" % (end - start))
+                duration += (end - start)
+
+        new_text = ", ".join(new_text)
+
+        #print ("Merged entries:")
+        #print ("  - merged id: %d" % ids[0])
+        #print ("  - merged text: %s" % new_text)
+        #print ("  - merged duration: %d seconds" % duration)
+
+        if unfinished:
+            # need to fake-set the start so the durations match up
+            query = """
+                UPDATE worklog
+                SET
+                    comment = ?,
+                    start = datetime('now', '-%s seconds'),
+                    end   = NULL
+                WHERE id = ?
+            """ % duration
+            stmt.execute(query, (new_text, ids[0]))
+
+        else:
+            # need to fake-set the end so the durations match up
+            query = """
+                UPDATE worklog
+                SET
+                    comment = ?,
+                    end     = datetime(start, '+%s seconds')
+                WHERE id = ?
+            """ % duration
+            stmt.execute(query, (new_text, ids[0]))
+
+        # Remove old entries
+        query = """
+            DELETE FROM worklog
+            WHERE id = ?
+        """
+        for id_ in ids[1:]:
+            stmt.execute(query, [id_])
+
+        self.db.commit()
+
     def entries_since(self, since):
         """Iterator for all entries. Yields a hashmap with the data"""
         stmt = self.db.cursor()
@@ -259,6 +341,7 @@ def show_help(error = None):
     print("  work reset                     -- removes last task")
     print("  work resume                    -- resumes the last logged task")
     print("  work resume <id>               -- resumes task with given id")
+    print("  work merge  <id> <id> [...]    -- merge all those entries into a single entry")
     print("  work edit <task-description>   -- edits text of last task")
     print("  work since yyyy-mm-dd          -- list all tasks since the given date")
     print("  work sum                       -- Sum of work time, grouped by day")
@@ -347,6 +430,11 @@ if __name__ == '__main__':
 
     elif action == 'reset':
         notify(log.reset_last()),
+
+    elif action == 'merge':
+        ids = [int(arg) for arg in sys.argv[2::] if not arg.startswith('--')]
+        notify("Merged entries %s" % (", ".join([str(x) for x in ids])))
+        log.merge(ids)
 
     elif action == 'edit':
         if comment != '':
