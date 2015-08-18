@@ -298,8 +298,6 @@ if __name__ == '__main__':
 
     log = WorkLogDB()
 
-    print(flags)
-
     if '--notify' in flags:
         notify = notify_send
     else:
