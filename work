@@ -289,6 +289,10 @@ if __name__ == '__main__':
 
     if action == 'on':
         log.close_existing()
+        if comment == '-':
+            log.close_existing()
+            print("Stopped tracking.")
+            exit(0)
         if comment == '--ask':
             comment = ask('What are you working on?')
         if comment == '' or comment == 'nothing':
