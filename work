@@ -314,6 +314,7 @@ if __name__ == '__main__':
         if comment == '-':
             log.close_existing()
             notify("Stopped tracking.")
+            exit(0)
 
         if comment == '' or comment == 'nothing':
             notify("No input, keeping current state")
