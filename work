@@ -387,7 +387,6 @@ if __name__ == '__main__':
         notify = print
 
     if action == 'on':
-        log.close_existing()
 
         if '--ask' in flags:
             comment = ask('What are you working on?')
@@ -401,6 +400,7 @@ if __name__ == '__main__':
             notify("No input, keeping current state")
             exit(0)
         else:
+            log.close_existing()
             log.create(comment)
             notify("New entry stored.\n\n %s" % log.list_since('now', False))
 
