@@ -343,6 +343,7 @@ def show_help(error = None):
     print("  work resume <id>               -- resumes task with given id")
     print("  work merge  <id> <id> [...]    -- merge all those entries into a single entry")
     print("  work edit <task-description>   -- edits text of last task")
+    print("  work rename <task-description> -- alias for edit")
     print("  work since yyyy-mm-dd          -- list all tasks since the given date")
     print("  work sum                       -- Sum of work time, grouped by day")
     print("")
@@ -436,7 +437,7 @@ if __name__ == '__main__':
         notify("Merged entries %s" % (", ".join([str(x) for x in ids])))
         log.merge(ids)
 
-    elif action == 'edit':
+    elif action in ('edit','rename'):
         if comment != '':
             notify(log.update_last(comment)),
         else:
